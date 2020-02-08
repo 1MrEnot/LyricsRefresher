@@ -3,42 +3,50 @@ from mutagen import flac
 from os import path
 import asyncio
 from FileIter import FileIter, LockedIterator
+import json
 
 import logging
 
 
-worker_amount = 5
+worker_amount = 10
 token = 'slcoSGPx2vPljso3yHWwGB2uNzQ1rpV9dGqHYzSpWuOlaWXsqYeC1v9IaQvZ3Sta'
-music_folder = r"D:\test"
+config = 'config.json'
+default_config_data = '{"done": []}'
+
+music_folder = r"D:\Music"
 singles_folder = path.join(music_folder, 'Singles')
 albums_folder = path.join(music_folder, 'Albums')
-done_file = 'done.json'
 
 logging.basicConfig(format='[%(asctime)s] %(filename)s     %(message)s', level=logging.INFO)
 
 
+
 if __name__ == '__main__':
 
+    if not path.exists(config):
+        with open(config, 'w', encoding='utf-8') as file:
+            file.write(default_config_data)
 
-    iterator = LockedIterator(FileIter(music_folder, done_file))
+    with open(config, encoding='utf-8') as file:
+        data = json.load(file)
+
+    iterator = LockedIterator(FileIter(albums_folder, data['done']))
     workers = []
 
     for i in range(worker_amount):
-        name = f"Lyrics Maker #{i}"
-        maker = LyricsMaker(token, iterator, done_file, name)
+        maker = LyricsMaker(token, iterator, f"Lyrics Maker #{i}")
         workers.append(maker)
 
     for worker in workers:
         worker.start()
 
+    for worker in workers:
+        worker.join()
 
-    while True:
-        stopped = True
-        for worker in workers:
-            stopped = stopped and not worker.is_alive()
+    for worker in workers:
+        data['done'].extend(worker.done)
 
-        if stopped:
-            break
+    with open(config, 'w', encoding='utf-8') as file:
+        json.dump(data, file)
 
     logging.info(f"done!")
-    print(f"I AM DONE!!!")
